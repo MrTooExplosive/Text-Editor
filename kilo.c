@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <errno.h>
 
+#define CTRL_KEY(k) ((k) & 0x1f)
+
 void enableRawMode();
 void disableRawMode();
 void die(const char *s);
@@ -24,7 +26,7 @@ int main()
 			printf("%d\r\n", c);
 		else
 			printf("%d ('%c')\r\n", c, c);
-		if (c == 'q') break;
+		if (c == CTRL_KEY('q')) break;
 	}
 
 	return 0;
