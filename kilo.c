@@ -12,6 +12,7 @@ void disableRawMode();
 void die(const char *s);
 void editorProcessKeyPress();
 char editorReadKey();
+void editorRefreshScreen();
 
 struct termios orig_termios;
 
@@ -21,8 +22,18 @@ int main()
 
 	char c;
 	while (1)
+	{
+		editorRefreshScreen();
 		editorProcessKeypress();
+	}
 	return 0;
+}
+
+// Clears the screen
+void editorRefreshScreen()
+{
+	write(STDOUT_FILENO, "\x1b[2J", 4);
+	write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
 // Reads a key from the terminal
