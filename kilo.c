@@ -5,19 +5,10 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <string.h>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
-
-void enableRawMode();
-void disableRawMode();
-void die(const char *s);
-void editorProcessKeypress();
-char editorReadKey();
-void editorRefreshScreen();
-void editorDrawRows();
-int getWindowSize(int *rows, int *cols);
-void initEditor();
-int getCursorPosition(int *rows, int *cols);
+#define ABUF_INIT {NULL, 0}
 
 struct editorConfig
 {
@@ -25,6 +16,25 @@ struct editorConfig
 	struct termios orig_termios;
 };
 struct editorConfig E;
+
+struct abuf
+{
+	char *b;
+	int len;
+};
+
+void abFree(struct abuf *ab);
+void abAppend(struct abuf *ab, const char *s, int len);
+void enableRawMode();
+void disableRawMode();
+void die(const char *s);
+void editorProcessKeypress();
+char editorReadKey();
+void editorRefreshScreen();
+void editorDrawRows(struct abuf *ab);
+int getWindowSize(int *rows, int *cols);
+void initEditor();
+int getCursorPosition(int *rows, int *cols);
 
 int main()
 {
@@ -39,22 +49,44 @@ int main()
 	return 0;
 }
 
+// Appends to a dynamic string
+void abAppend(struct abuf *ab, const char *s, int len)
+{
+	char *new = realloc(ab->b, ab->len + len);
+	if (new == NULL)
+		return;
+	memcpy(&new[ab->len], s, len);
+	ab->b = new;
+	ab->len += len;
+}
+
+// Frees a buffer
+void abFree(struct abuf *ab)
+{
+	free(ab->b);
+}
+
 // Stores the cursor position
 int getCursorPosition(int *rows, int *cols)
 {
+	char buf[32];
+	unsigned  int i = 0;
 	if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
 		return -1;
-	printf("\r\n");
-	char c;
-	while (read(STDIN_FILENO, &c, 1) == 1)
+	while (i < sizeof(buf) - 1)
 	{
-		if (iscntrl(c))
-			printf("%d\r\n", c);
-		else
-			printf("%d ('%c')\r\n", c, c);
+		if (read(STDIN_FILENO, &buf[i], 1) != 1)
+			break;
+		if (buf[i] == 'R')
+			break;
+		i++;
 	}
-	editorReadKey();
-	return -1;
+	buf[i] = '\0';
+	if (buf[0] != '\x1b' || buf[1] != '[')
+		return -1;
+	if (sscanf(&buf[2], "%d;%d", rows, cols) != 2)
+		return -1;
+	return 0;
 }
 
 // Initializes the editor
@@ -83,19 +115,28 @@ int getWindowSize(int *rows, int *cols)
 }
 
 // Draws a tilde at the beginning of each line
-void editorDrawRows()
+void editorDrawRows(struct abuf *ab)
 {
 	for (int y = 0; y < E.screenrows; y++)
-		write(STDOUT_FILENO, "~\r\n", 3);
+	{
+		abAppend(ab, "~", 1);
+		abAppend(ab, "\x1b[K", 3);
+		if (y < E.screenrows - 1)
+			abAppend(ab, "\r\n", 2);
+	}
 }
 
 // Clears the screen
 void editorRefreshScreen()
 {
-	write(STDOUT_FILENO, "\x1b[2J", 4);
-	write(STDOUT_FILENO, "\x1b[H", 3);
-	editorDrawRows();
-	write(STDOUT_FILENO, "\x1b[H", 3);
+	struct abuf ab = ABUF_INIT;
+	abAppend(&ab, "\x1b[?25l", 6);
+	abAppend(&ab, "\x1b[H", 3);
+	editorDrawRows(&ab);
+	abAppend(&ab, "\x1b[H", 3);
+	abAppend(&ab, "\x1b[?25h", 6);
+	write(STDOUT_FILENO, ab.b, ab.len);
+	abFree(&ab);
 }
 
 // Reads a key from the terminal
