@@ -13,6 +13,7 @@
 
 struct editorConfig
 {
+	int cx, cy;
 	int screenrows, screencols;
 	struct termios orig_termios;
 };
@@ -24,6 +25,7 @@ struct abuf
 	int len;
 };
 
+void editorMoveCursor(char key);
 void abFree(struct abuf *ab);
 void abAppend(struct abuf *ab, const char *s, int len);
 void enableRawMode();
@@ -48,6 +50,26 @@ int main()
 		editorProcessKeypress();
 	}
 	return 0;
+}
+
+// Moves the cursor
+void editorMoveCursor(char key)
+{
+	switch (key)
+	{
+		case 'a':
+			E.cx--;
+			break;
+		case 'd':
+			E.cx++;
+			break;
+		case 'w':
+			E.cy--;
+			break;
+		case 's':
+			E.cy++;
+			break;
+	}
 }
 
 // Appends to a dynamic string
@@ -93,6 +115,8 @@ int getCursorPosition(int *rows, int *cols)
 // Initializes the editor
 void initEditor()
 {
+	E.cx = 0;
+	E.cy = 0;
 	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
 		die("getWindowSize");
 }
@@ -150,7 +174,9 @@ void editorRefreshScreen()
 	abAppend(&ab, "\x1b[?25l", 6);
 	abAppend(&ab, "\x1b[H", 3);
 	editorDrawRows(&ab);
-	abAppend(&ab, "\x1b[H", 3);
+	char buf[32];
+	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+	abAppend(&ab, buf, strlen(buf));
 	abAppend(&ab, "\x1b[?25h", 6);
 	write(STDOUT_FILENO, ab.b, ab.len);
 	abFree(&ab);
@@ -179,6 +205,12 @@ void editorProcessKeypress()
 			write(STDOUT_FILENO, "\x1b[2J", 4);
 			write(STDOUT_FILENO, "\x1b[H", 3);
 			exit(0);
+			break;
+		case 'w':
+		case 's':
+		case 'a':
+		case 'd':
+			editorMoveCursor(c);
 			break;
 	}
 }
