@@ -4,23 +4,32 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/ioctl.h>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 void enableRawMode();
 void disableRawMode();
 void die(const char *s);
-void editorProcessKeyPress();
+void editorProcessKeypress();
 char editorReadKey();
 void editorRefreshScreen();
+void editorDrawRows();
+int getWindowSize(int *rows, int *cols);
+void initEditor();
 
-struct termios orig_termios;
+struct editorConfig
+{
+	int screenrows, screencols;
+	struct termios orig_termios;
+};
+struct editorConfig E;
 
 int main()
 {
 	enableRawMode();
+	initEditor();
 
-	char c;
 	while (1)
 	{
 		editorRefreshScreen();
@@ -29,10 +38,42 @@ int main()
 	return 0;
 }
 
+// Initializes the editor
+void initEditor()
+{
+	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
+		die("getWindowSize");
+}
+
+// Stores the number of rows and columns
+int getWindowSize(int *rows, int *cols)
+{
+	struct winsize ws;
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
+	{
+		return -1;
+	}
+	else
+	{
+		*cols = ws.ws_col;
+		*rows = ws.ws_row;
+		return 0;
+	}
+}
+
+// Draws a tilde at the beginning of each line
+void editorDrawRows()
+{
+	for (int y = 0; y < E.screenrows; y++)
+		write(STDOUT_FILENO, "~\r\n", 3);
+}
+
 // Clears the screen
 void editorRefreshScreen()
 {
 	write(STDOUT_FILENO, "\x1b[2J", 4);
+	write(STDOUT_FILENO, "\x1b[H", 3);
+	editorDrawRows();
 	write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
@@ -76,23 +117,23 @@ void die(const char *s)
 // Returns the terminal to normal mode
 void disableRawMode()
 {
-	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) ==  -1)
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) ==  -1)
 		die("tcsetattr");
 }
 
 // Enables raw mode for character input
 void enableRawMode()
 {
-	if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) die("tcgetattr");
+	if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) die("tcgetattr");
 	atexit(disableRawMode);
 
-	struct termios raw = orig_termios;
+	struct termios raw = E.orig_termios;
 	raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
 	raw.c_oflag &= ~(OPOST);
 	raw.c_oflag |= ~(CS8);
 	raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 	raw.c_cc[VMIN] = 0;
-	raw.c_CC[VTIME] = 1;
+	raw.c_cc[VTIME] = 1;
 
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
