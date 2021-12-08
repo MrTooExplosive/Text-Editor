@@ -11,6 +11,14 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 
+enum editorKey
+{
+	ARROW_LEFT = 1000,
+	ARROW_RIGHT,
+	ARROW_UP,
+	ARROW_DOWN
+};
+
 struct editorConfig
 {
 	int cx, cy;
@@ -25,14 +33,14 @@ struct abuf
 	int len;
 };
 
-void editorMoveCursor(char key);
+void editorMoveCursor(int key);
 void abFree(struct abuf *ab);
 void abAppend(struct abuf *ab, const char *s, int len);
 void enableRawMode();
 void disableRawMode();
 void die(const char *s);
 void editorProcessKeypress();
-char editorReadKey();
+int editorReadKey();
 void editorRefreshScreen();
 void editorDrawRows(struct abuf *ab);
 int getWindowSize(int *rows, int *cols);
@@ -53,21 +61,25 @@ int main()
 }
 
 // Moves the cursor
-void editorMoveCursor(char key)
+void editorMoveCursor(int key)
 {
 	switch (key)
 	{
-		case 'a':
-			E.cx--;
+		case ARROW_LEFT:
+			if (E.cx != 0)
+				E.cx--;
 			break;
-		case 'd':
-			E.cx++;
+		case ARROW_RIGHT:
+			if (E.cx != E.screencols - 1)
+				E.cx++;
 			break;
-		case 'w':
-			E.cy--;
+		case ARROW_UP:
+			if (E.cy != 0)
+				E.cy--;
 			break;
-		case 's':
-			E.cy++;
+		case ARROW_DOWN:
+			if (E.cy != E.screenrows - 1)
+				E.cy++;
 			break;
 	}
 }
@@ -183,7 +195,7 @@ void editorRefreshScreen()
 }
 
 // Reads a key from the terminal
-char editorReadKey()
+int editorReadKey()
 {
 	int nread;
 	char c;
@@ -203,10 +215,10 @@ char editorReadKey()
 		{
 			switch (seq[1])
 			{
-				case 'A': return 'w';
-				case 'B': return 's';
-				case 'C': return 'd';
-				case 'D': return 'a';
+				case 'A': return ARROW_UP;
+				case 'B': return ARROW_DOWN;
+				case 'C': return ARROW_RIGHT;
+				case 'D': return ARROW_LEFT;
 			}
 		}
 		return '\x1b';
@@ -218,7 +230,7 @@ char editorReadKey()
 // Process each key read
 void editorProcessKeypress()
 {
-	char c = editorReadKey();
+	int c = editorReadKey();
 	switch (c)
 	{
 		case CTRL_KEY('q'):
@@ -226,10 +238,10 @@ void editorProcessKeypress()
 			write(STDOUT_FILENO, "\x1b[H", 3);
 			exit(0);
 			break;
-		case 'w':
-		case 's':
-		case 'a':
-		case 'd':
+		case ARROW_UP:
+		case ARROW_DOWN:
+		case ARROW_LEFT:
+		case ARROW_RIGHT:
 			editorMoveCursor(c);
 			break;
 	}
