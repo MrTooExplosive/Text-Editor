@@ -6,10 +6,17 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <string.h>
+#include <sys/types.h>
 
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
+
+typedef struct erow
+{
+	int size;
+	char *chars;
+} erow;
 
 enum editorKey
 {
@@ -29,6 +36,8 @@ struct editorConfig
 	int cx, cy;
 	int screenrows, screencols;
 	struct termios orig_termios;
+	int numrows;
+	erow row;
 };
 struct editorConfig E;
 
@@ -38,6 +47,7 @@ struct abuf
 	int len;
 };
 
+void editorOpen();
 void editorMoveCursor(int key);
 void abFree(struct abuf *ab);
 void abAppend(struct abuf *ab, const char *s, int len);
@@ -56,6 +66,7 @@ int main()
 {
 	enableRawMode();
 	initEditor();
+	editorOpen();
 
 	while (1)
 	{
@@ -63,6 +74,18 @@ int main()
 		editorProcessKeypress();
 	}
 	return 0;
+}
+
+// Opens the editor for reading and writing to a file
+void editorOpen()
+{
+	char *line = "Hello, world!";
+	ssize_t linelen = 13;
+	E.row.size = linelen;
+	E.row.chars = malloc(linelen + 1);
+	memcpy(E.row.chars, line, linelen);
+	E.row.chars[linelen] = '\0';
+	E.numrows = 1;
 }
 
 // Moves the cursor
@@ -134,6 +157,7 @@ void initEditor()
 {
 	E.cx = 0;
 	E.cy = 0;
+	E.numrows = 0;
 	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
 		die("getWindowSize");
 }
@@ -161,23 +185,33 @@ void editorDrawRows(struct abuf *ab)
 {
 	for (int y = 0; y < E.screenrows; y++)
 	{
-		if (y == E.screenrows / 3)
+		if (y >= E.numrows)
 		{
-			char welcome[80];
-			int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
-			if (welcomelen > E.screencols)
-				welcomelen = E.screencols;
-			int padding = (E.screencols - welcomelen) / 2;
-			if (padding)
+			if (y == E.screenrows / 3)
 			{
-				abAppend(ab, "~", 1);
-				padding--;
+				char welcome[80];
+				int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
+				if (welcomelen > E.screencols)
+					welcomelen = E.screencols;
+				int padding = (E.screencols - welcomelen) / 2;
+				if (padding)
+				{
+					abAppend(ab, "~", 1);
+					padding--;
+				}
+				while (padding--) abAppend(ab, " ", 1);
+				abAppend(ab, welcome, welcomelen);
 			}
-			while (padding--) abAppend(ab, " ", 1);
-			abAppend(ab, welcome, welcomelen);
+			else
+				abAppend(ab, "~", 1);
 		}
 		else
-			abAppend(ab, "~", 1);
+		{
+			int len = E.row.size;
+			if (len > E.screencols)
+				len = E.screencols;
+			abAppend(ab, E.row.chars, len);
+		}
 		abAppend(ab, "\x1b[K", 3);
 		if (y < E.screenrows - 1)
 			abAppend(ab, "\r\n", 2);
