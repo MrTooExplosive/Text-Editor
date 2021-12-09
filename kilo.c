@@ -1,3 +1,7 @@
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <unistd.h>
 #include <termios.h>
 #include <stdlib.h>
@@ -47,7 +51,7 @@ struct abuf
 	int len;
 };
 
-void editorOpen();
+void editorOpen(char *filename);
 void editorMoveCursor(int key);
 void abFree(struct abuf *ab);
 void abAppend(struct abuf *ab, const char *s, int len);
@@ -62,11 +66,13 @@ int getWindowSize(int *rows, int *cols);
 void initEditor();
 int getCursorPosition(int *rows, int *cols);
 
-int main()
+int main(int argc, char *argv[])
 {
 	enableRawMode();
 	initEditor();
-	editorOpen();
+	if (argc >= 2)
+		editorOpen(argv[1]);
+
 
 	while (1)
 	{
@@ -77,15 +83,27 @@ int main()
 }
 
 // Opens the editor for reading and writing to a file
-void editorOpen()
+void editorOpen(char *filename)
 {
-	char *line = "Hello, world!";
-	ssize_t linelen = 13;
-	E.row.size = linelen;
-	E.row.chars = malloc(linelen + 1);
-	memcpy(E.row.chars, line, linelen);
-	E.row.chars[linelen] = '\0';
-	E.numrows = 1;
+	FILE *fp = fopen(filename, "r");
+	if (!fp)
+		die("fopen");
+	char *line = NULL;
+	size_t linecap = 0;
+	ssize_t linelen;
+	linelen = getline(&line, &linecap, fp);
+	if (linelen != -1)
+	{
+		while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+			linelen--;
+		E.row.size = linelen;
+		E.row.chars = malloc(linelen + 1);
+		memcpy(E.row.chars, line, linelen);
+		E.row.chars[linelen] = '\0';
+		E.numrows = 1;
+	}
+	free(line);
+	fclose(fp);
 }
 
 // Moves the cursor
@@ -187,7 +205,7 @@ void editorDrawRows(struct abuf *ab)
 	{
 		if (y >= E.numrows)
 		{
-			if (y == E.screenrows / 3)
+			if (E.numrows == 0 && y == E.screenrows / 3)
 			{
 				char welcome[80];
 				int welcomelen = snprintf(welcome, sizeof(welcome), "Kilo editor -- version %s", KILO_VERSION);
