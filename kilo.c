@@ -43,6 +43,7 @@ struct editorConfig
 	int numrows;
 	erow *row;
 	int rowoff;
+	int coloff;
 };
 struct editorConfig E;
 
@@ -91,6 +92,10 @@ void editorScroll()
 		E.rowoff = E.cy;
 	if (E.cy >= E.rowoff + E.screenrows)
 		E.rowoff = E.cy - E.screenrows + 1;
+	if (E.cx < E.coloff)
+		E.coloff = E.cx;
+	if (E.cx >= E.coloff + E.screencols)
+		E.coloff = E.cx - E.screencols + 1;
 }
 
 // Appends a row to the printing buffer
@@ -137,8 +142,7 @@ void editorMoveCursor(int key)
 				E.cx--;
 			break;
 		case ARROW_RIGHT:
-			if (E.cx != E.screencols - 1)
-				E.cx++;
+			E.cx++;
 			break;
 		case ARROW_UP:
 			if (E.cy != 0)
@@ -199,6 +203,8 @@ void initEditor()
 	E.numrows = 0;
 	E.row = NULL;
 	E.rowoff = 0;
+	E.coloff = 0;
+
 	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
 		die("getWindowSize");
 }
@@ -249,10 +255,11 @@ void editorDrawRows(struct abuf *ab)
 		}
 		else
 		{
-			int len = E.row[y].size;
+			int len = E.row[filerow].size - E.coloff;
+			if (len > 0) len = 0;
 			if (len > E.screencols)
 				len = E.screencols;
-			abAppend(ab, E.row[y].chars, len);
+			abAppend(ab, &E.row[filerow].chars[E.coloff], len);
 		}
 		abAppend(ab, "\x1b[K", 3);
 		if (y < E.screenrows - 1)
@@ -269,7 +276,7 @@ void editorRefreshScreen()
 	abAppend(&ab, "\x1b[H", 3);
 	editorDrawRows(&ab);
 	char buf[32];
-	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
+	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx - E.coloff + 1);
 	abAppend(&ab, buf, strlen(buf));
 	abAppend(&ab, "\x1b[?25h", 6);
 	write(STDOUT_FILENO, ab.b, ab.len);
