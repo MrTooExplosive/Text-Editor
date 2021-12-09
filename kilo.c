@@ -15,11 +15,14 @@
 #define KILO_VERSION "0.0.1"
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
+#define KILO_TAB_STOP 8
 
 typedef struct erow
 {
 	int size;
 	char *chars;
+	int rsize;
+	char *render;
 } erow;
 
 enum editorKey
@@ -37,6 +40,7 @@ enum editorKey
 
 struct editorConfig
 {
+	int rx;
 	int cx, cy;
 	int screenrows, screencols;
 	struct termios orig_termios;
@@ -52,7 +56,7 @@ struct abuf
 	char *b;
 	int len;
 };
-
+int editorRowCxToRx(erow *row, int cx);
 void editorOpen(char *filename);
 void editorMoveCursor(int key);
 void abFree(struct abuf *ab);
@@ -69,6 +73,7 @@ void initEditor();
 int getCursorPosition(int *rows, int *cols);
 void editorAppendRow(char *s, size_t len);
 void editorScroll();
+void editorUpdateRow(erow *row);
 
 int main(int argc, char *argv[])
 {
@@ -85,17 +90,58 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
+
+int editorRowCxToRx(erow *row, int cx)
+{
+	int rx = 0;
+	for (int j = 0; j < cx; j++)
+	{
+		if (row->chars[j] == '\t')
+			rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
+		rx++;
+	}
+}
+
+// Updates row
+void editorUpdateRow(erow *row)
+{
+	int tabs = 0;
+	for (int j = 0; j < row->size; j++)
+	{
+		if (row->chars[j] == '\t')
+			tabs++;
+	}
+	free(row->render);
+	row->render = malloc(row->size + tabs*(KILO_TAB_STOP - 1) + 1);
+	int idx = 0;
+	for (int j = 0; j < row->size; j++)
+	{
+		if (row->chars[j] == '\t')
+		{
+			row->render[idx++] = ' ';
+			while (idx % KILO_TAB_STOP != 0) row->render[idx++] = ' ';
+		}
+		else
+			row->render[idx++] = row->chars[j];
+	}
+	row->render[idx] = '\0';
+	row->rsize = idx;
+}
+
 // Checks if the cursor is not visible and if so, scrolls
 void editorScroll()
 {
+	E.rx = 0;
+	if (E.cy < E.numrows)
+		E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
 	if (E.cy < E.rowoff)
 		E.rowoff = E.cy;
 	if (E.cy >= E.rowoff + E.screenrows)
 		E.rowoff = E.cy - E.screenrows + 1;
-	if (E.cx < E.coloff)
-		E.coloff = E.cx;
-	if (E.cx >= E.coloff + E.screencols)
-		E.coloff = E.cx - E.screencols + 1;
+	if (E.rx < E.coloff)
+		E.coloff = E.rx;
+	if (E.rx >= E.coloff + E.screencols)
+		E.coloff = E.rx - E.screencols + 1;
 }
 
 // Appends a row to the printing buffer
@@ -107,6 +153,9 @@ void editorAppendRow(char *s, size_t len)
 	E.row[at].chars = malloc(len + 1);
 	memcpy(E.row[at].chars, s, len);
 	E.row[at].chars[len] = '\0';
+	E.row[at].rsize = 0;
+	E.row[at].render = NULL;
+	editorUpdateRow(&E.row[at]);
 	E.numrows++;
 }
 
@@ -220,7 +269,7 @@ void initEditor()
 	E.row = NULL;
 	E.rowoff = 0;
 	E.coloff = 0;
-
+	E.rx = 0;
 	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
 		die("getWindowSize");
 }
@@ -271,11 +320,11 @@ void editorDrawRows(struct abuf *ab)
 		}
 		else
 		{
-			int len = E.row[filerow].size - E.coloff;
+			int len = E.row[filerow].rsize - E.coloff;
 			if (len > 0) len = 0;
 			if (len > E.screencols)
 				len = E.screencols;
-			abAppend(ab, &E.row[filerow].chars[E.coloff], len);
+			abAppend(ab, &E.row[filerow].render[E.coloff], len);
 		}
 		abAppend(ab, "\x1b[K", 3);
 		if (y < E.screenrows - 1)
