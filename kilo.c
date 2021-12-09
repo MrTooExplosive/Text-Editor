@@ -42,6 +42,7 @@ struct editorConfig
 	struct termios orig_termios;
 	int numrows;
 	erow *row;
+	int rowoff;
 };
 struct editorConfig E;
 
@@ -66,6 +67,7 @@ int getWindowSize(int *rows, int *cols);
 void initEditor();
 int getCursorPosition(int *rows, int *cols);
 void editorAppendRow(char *s, size_t len);
+void editorScroll();
 
 int main(int argc, char *argv[])
 {
@@ -81,6 +83,14 @@ int main(int argc, char *argv[])
 		editorProcessKeypress();
 	}
 	return 0;
+}
+// Checks if the cursor is not visible and if so, scrolls
+void editorScroll()
+{
+	if (E.cy < E.rowoff)
+		E.rowoff = E.cy;
+	if (E.cy >= E.rowoff + E.screenrows)
+		E.rowoff = E.cy - E.screenrows + 1;
 }
 
 // Appends a row to the printing buffer
@@ -135,7 +145,7 @@ void editorMoveCursor(int key)
 				E.cy--;
 			break;
 		case ARROW_DOWN:
-			if (E.cy != E.screenrows - 1)
+			if (E.cy < E.numrows)
 				E.cy++;
 			break;
 	}
@@ -188,6 +198,7 @@ void initEditor()
 	E.cy = 0;
 	E.numrows = 0;
 	E.row = NULL;
+	E.rowoff = 0;
 	if (getWindowSize(&E.screenrows, &E.screencols) == -1)
 		die("getWindowSize");
 }
@@ -215,7 +226,8 @@ void editorDrawRows(struct abuf *ab)
 {
 	for (int y = 0; y < E.screenrows; y++)
 	{
-		if (y >= E.numrows)
+		int filerow = y + E.rowoff;
+		if (filerow >= E.numrows)
 		{
 			if (E.numrows == 0 && y == E.screenrows / 3)
 			{
@@ -251,6 +263,7 @@ void editorDrawRows(struct abuf *ab)
 // Clears the screen
 void editorRefreshScreen()
 {
+	editorScroll();
 	struct abuf ab = ABUF_INIT;
 	abAppend(&ab, "\x1b[?25l", 6);
 	abAppend(&ab, "\x1b[H", 3);
