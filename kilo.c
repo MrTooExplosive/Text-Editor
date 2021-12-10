@@ -62,6 +62,7 @@ struct abuf
 	int len;
 };
 
+void editorRowInsertChar(erow *row, int at, int c);
 void editorSetStatusMessage(const char *fmt, ...);
 void editorDrawStatusBar(struct abuf *ab);
 int editorRowCxToRx(erow *row, int cx);
@@ -83,6 +84,7 @@ void editorAppendRow(char *s, size_t len);
 void editorScroll();
 void editorUpdateRow(erow *row);
 void editorDrawMessageBar(struct abuf *ab);
+void editorInsertChar(int c);
 
 int main(int argc, char *argv[])
 {
@@ -98,6 +100,25 @@ int main(int argc, char *argv[])
 		editorProcessKeypress();
 	}
 	return 0;
+}
+
+void editorInsertChar(int c)
+{
+	if (E.cy == E.numrows)
+		editorAppendRow("", 0);
+	editorRowInsertChar(&E.row[E.cy], E.cx, c);
+	E.cx++;
+}
+
+void editorRowInsertChar(erow *row, int at, int c)
+{
+	if (at < 0 || at > row->size)
+		at = row->size;
+	row->chars = realloc(row->chars, row->size + 2);
+	memmove(&row->chars[at+1], &row->chars[at], row->size - at + 1);
+	row->size++;
+	row->chars[at] = c;
+	editorUpdateRow(row);
 }
 
 void editorDrawMessageBar(struct abuf *ab)
@@ -513,6 +534,9 @@ void editorProcessKeypress()
 		case ARROW_LEFT:
 		case ARROW_RIGHT:
 			editorMoveCursor(c);
+			break;
+		default:
+			editorInsertChar(c);
 			break;
 	}
 }
