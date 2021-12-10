@@ -126,8 +126,19 @@ char *editorPrompt(char *prompt)
 	{
 		editorSetStatusMessage(prompt, buf);
 		editorRefreshScreen();
-		int c= editorReadKey();
-		if (c == '\r')
+		int c = editorReadKey();
+		if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE)
+		{
+			if (buflen != 0)
+				buf[--buflen] = '\0';
+		}
+		else if (c == "\x1b")
+		{
+			editorSetStatusMessage("");
+			free(buf);
+			return NULL;
+		}
+		else if (c == '\r')
 		{
 			if (buflen != 0)
 			{
@@ -225,7 +236,14 @@ void editorRowDelChar(erow *row, int at)
 void editorSave()
 {
 	if (E.filename == NULL)
+	{
 		E.filename = editorPrompt("Save as: %s");
+		if (E.filename == NULL)
+		{
+			editorSetStatusMessage("Save aborted");
+			return;
+		}
+	}
 	int len;
 	char *buf = editorRowsToString(&len);
 	int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
