@@ -22,7 +22,7 @@
 #define KILO_TAB_STOP 8
 #define HL_HIGHLIGHT_NUMBERS (1<<0)
 #define HL_HIGHLIGHT_STRINGS (1<<1)
-#define HDLB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
+#define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
 struct editorSyntax
 {
@@ -172,7 +172,7 @@ void editorSelectSyntaxHighlight()
 	if (E.filename == NULL)
 		return;
 	char *ext = strrchr(E.filename, '.');
-	for (unsigned int j = 0; j < HDLB_ENTRIES; j++)
+	for (unsigned int j = 0; j < HLDB_ENTRIES; j++)
 	{
 		struct editorSyntax *s = &HLDB[j];
 		unsigned int i = 0;
@@ -423,7 +423,6 @@ void editorFindCallback(char *query, int key)
 			break;
 		}
 	}
-	free(query);
 }
 
 char *editorPrompt(char *prompt, void (*callback)(char*, int))
@@ -556,7 +555,7 @@ void editorSave()
 {
 	if (E.filename == NULL)
 	{
-		E.filename = editorPrompt("Save as: %s", NULL);
+		E.filename = editorPrompt("Save as: %s (ESC to cancel)", NULL);
 		if (E.filename == NULL)
 		{
 			editorSetStatusMessage("Save aborted");
@@ -654,7 +653,6 @@ void editorDrawStatusBar(struct abuf *ab)
 	if (len > E.screencols)
 		len = E.screencols;
 	abAppend(ab, status, len);
-	len = 0;
 	while (len < E.screencols)
 	{
 		if (E.screencols - len == rlen)
@@ -681,6 +679,7 @@ int editorRowCxToRx(erow *row, int cx)
 			rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
 		rx++;
 	}
+	return rx;
 }
 
 // Updates row
@@ -763,12 +762,9 @@ void editorOpen(char *filename)
 	ssize_t linelen;
 	while ((linelen = getline(&line, &linecap, fp)) != -1)
 	{
-		if (linelen != -1)
-		{
-			while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
-				linelen--;
-			editorInsertRow(E.numrows, line, linelen);
-		}
+		while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
+			linelen--;
+		editorInsertRow(E.numrows, line, linelen);
 	}
 	free(line);
 	fclose(fp);
@@ -807,11 +803,11 @@ void editorMoveCursor(int key)
 			if (E.cy < E.numrows)
 				E.cy++;
 			break;
-		row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
-		int rowlen = row ? row->size : 0;
-		if (E.cx > rowlen)
-			E.cx = rowlen;
 	}
+	row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+	int rowlen = row ? row->size : 0;
+	if (E.cx > rowlen)
+		E.cx = rowlen;
 }
 
 // Appends to a dynamic string
@@ -921,7 +917,7 @@ void editorDrawRows(struct abuf *ab)
 		else
 		{
 			int len = E.row[filerow].rsize - E.coloff;
-			if (len > 0) len = 0;
+			if (len < 0) len = 0;
 			if (len > E.screencols)
 				len = E.screencols;
 			char *c = &E.row[filerow].render[E.coloff];
@@ -956,6 +952,7 @@ void editorDrawRows(struct abuf *ab)
 					int color = editorSyntaxToColor(hl[j]);
 					if (current_color != color)
 					{
+						current_color = color;
 						char buf[16];
 						int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
 						abAppend(ab, buf, clen);
@@ -970,7 +967,7 @@ void editorDrawRows(struct abuf *ab)
 	}
 }
 
-// Clears the screen
+// Refreshes the screen
 void editorRefreshScreen()
 {
 	editorScroll();
@@ -981,7 +978,7 @@ void editorRefreshScreen()
 	editorDrawStatusBar(&ab);
 	editorDrawMessageBar(&ab);
 	char buf[32];
-	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx - E.coloff + 1);
+	snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.rx - E.coloff + 1);
 	abAppend(&ab, buf, strlen(buf));
 	abAppend(&ab, "\x1b[?25h", 6);
 	write(STDOUT_FILENO, ab.b, ab.len);
