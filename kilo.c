@@ -2,6 +2,7 @@
 #define _BSD_SOURCE
 #define _GNU_SOURCE
 
+#include <fcntl.h>
 #include <unistd.h>
 #include <termios.h>
 #include <stdlib.h>
@@ -63,6 +64,8 @@ struct abuf
 	int len;
 };
 
+void editorSave();
+char *editorRowsToString(int *buflen);
 void editorRowInsertChar(erow *row, int at, int c);
 void editorSetStatusMessage(const char *fmt, ...);
 void editorDrawStatusBar(struct abuf *ab);
@@ -101,6 +104,39 @@ int main(int argc, char *argv[])
 		editorProcessKeypress();
 	}
 	return 0;
+}
+
+void editorSave()
+{
+	if (E.filename == NULL)
+		return;
+	int len;
+	char *buf = editorRowsToString(&len);
+
+	int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+	ftruncate(fd, len);
+	write(fd, buf, len);
+	close(fd);
+	free(buf);
+}
+
+char *editorRowsToString(int *buflen)
+{
+	int totlen = 0;
+	for (int j = 0; j < E.numrows; j++)
+		totlen += E.row[j].size + 1;
+	*buflen = totlen;
+
+	char *buf = malloc(totlen);
+	char *p = buf;
+	for (int j = 0; j < E.numrows; j++)
+	{
+		memcpy(p, E.row[j].chars, E.row[j].size);
+		p += E.row[j].size;
+		*p = '\n';
+		p++;
+	}
+	return buf;
 }
 
 void editorInsertChar(int c)
@@ -508,6 +544,9 @@ void editorProcessKeypress()
 			write(STDOUT_FILENO, "\x1b[2J", 4);
 			write(STDOUT_FILENO, "\x1b[H", 3);
 			exit(0);
+			break;
+		case CTRL_KEY('s'):
+			editorSave();
 			break;
 		case HOME_KEY:
 			E.cx = 0;
