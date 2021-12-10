@@ -66,6 +66,7 @@ struct abuf
 	int len;
 };
 
+void editorFind();
 void editorSetStatusMessage(const char *fmt, ...);
 void editorSave();
 char *editorRowsToString(int *buflen);
@@ -99,6 +100,7 @@ void editorDelRow(int at);
 void editorRowAppendString(erow *row, char *s, size_t len);
 void editorInsertNewline();
 char *editorPrompt(char *prompt);
+int editorRowRxToCx(erow *row, int rx);
 
 int main(int argc, char *argv[])
 {
@@ -107,13 +109,48 @@ int main(int argc, char *argv[])
 	if (argc >= 2)
 		editorOpen(argv[1]);
 
-	editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
+	editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 	while (1)
 	{
 		editorRefreshScreen();
 		editorProcessKeypress();
 	}
 	return 0;
+}
+
+int editorRowRxToCx(erow *row, int rx)
+{
+	int cur_rx = 0;
+	int cx = 0;
+	for (cx; cx < row->size; cx++)
+	{
+		if (row->chars[cx] == '\t')
+			cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP);
+		cur_rx++;
+		if (cur_rx > rx)
+			return cx;
+	}
+	return cx;
+}
+
+void editorFind()
+{
+	char *query = editorPrompt("Search: %s (ESC to cancel)");
+	if (query == NULL)
+		return;
+	for (int i = 0; i < E.numrows; i++)
+	{
+		erow *row = &E.row[i];
+		char *match = strstr(row->render, query);
+		if (match)
+		{
+			E.cy = i;
+			E.cx = editorRowRxToCx(row, match - row->render);
+			E.rowoff = E.numrows;
+			break;
+		}
+	}
+	free(query);
 }
 
 char *editorPrompt(char *prompt)
@@ -715,6 +752,9 @@ void editorProcessKeypress()
 		case END_KEY:
 			if (E.cy < E.numrows)
 				E.cx = E.row[E.cy].size;
+			break;
+		case CTRL_KEY('f'):
+			editorFind();
 			break;
 		case BACKSPACE:
 		case CTRL_KEY('h'):
