@@ -96,7 +96,10 @@ struct abuf
 	int len;
 };
 
+// Different file types
 char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL};
+
+// Info for syntax highlighting in C
 char *C_HL_keywords[] = {"switch", "if", "while", "for", "break", "continue", "return", "else", "struct", "union", "typedef", "static", "enum", "class", "case", "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|", "void|", NULL};
 struct editorSyntax HLDB[] = {
 	{
@@ -108,6 +111,7 @@ struct editorSyntax HLDB[] = {
 	},
 };
 
+//All function prototypes
 int editorSyntaxToColor(int hl);
 void editorUpdateSyntax(erow *row);
 void editorFind();
@@ -212,6 +216,7 @@ int editorSyntaxToColor(int hl)
 	}
 }
 
+// Updates syntax of a row
 void editorUpdateSyntax(erow *row)
 {
 	row->hl = realloc(row->hl, row->rsize);
@@ -337,6 +342,7 @@ void editorUpdateSyntax(erow *row)
 		editorUpdateSyntax(&E.row[row->idx+1]);
 }
 
+// Allows the user to search through the file
 void editorFind()
 {
 	int saved_cx = E.cx;
@@ -356,6 +362,7 @@ void editorFind()
 	}
 }
 
+// Finds a row's rx from cx
 int editorRowRxToCx(erow *row, int rx)
 {
 	int cur_rx = 0;
@@ -371,6 +378,7 @@ int editorRowRxToCx(erow *row, int rx)
 	return cx;
 }
 
+// Searches the file for a query
 void editorFindCallback(char *query, int key)
 {
 	static int last_match = -1;
@@ -425,6 +433,7 @@ void editorFindCallback(char *query, int key)
 	}
 }
 
+// Creates the prompt
 char *editorPrompt(char *prompt, void (*callback)(char*, int))
 {
 	size_t bufsize = 128;
@@ -474,6 +483,7 @@ char *editorPrompt(char *prompt, void (*callback)(char*, int))
 	}
 }
 
+// Adds a newline
 void editorInsertNewline()
 {
 	if (E.cx == 0)
@@ -491,6 +501,7 @@ void editorInsertNewline()
 	E.cx = 0;
 }
 
+// Appends a string to a row
 void editorRowAppendString(erow *row, char *s, size_t len)
 {
 	row->chars = realloc(row->chars, row->size + len + 1);
@@ -501,6 +512,7 @@ void editorRowAppendString(erow *row, char *s, size_t len)
 	E.dirty++;
 }
 
+// Frees a row
 void editorFreeRow(erow *row)
 {
 	free(row->render);
@@ -508,6 +520,7 @@ void editorFreeRow(erow *row)
 	free(row->hl);
 }
 
+// Deletes a row
 void editorDelRow(int at)
 {
 	if (at < 0 || at >= E.numrows)
@@ -520,6 +533,7 @@ void editorDelRow(int at)
 	E.dirty++;
 }
 
+// Deletes a character
 void editorDelChar()
 {
 	if (E.cy == E.numrows)
@@ -541,6 +555,7 @@ void editorDelChar()
 	}
 }
 
+// Deletes a character in a row at a specific point
 void editorRowDelChar(erow *row, int at)
 {
 	if (at < 0 || at >= row->size)
@@ -551,6 +566,7 @@ void editorRowDelChar(erow *row, int at)
 	E.dirty++;
 }
 
+// Saves the file
 void editorSave()
 {
 	if (E.filename == NULL)
@@ -585,6 +601,7 @@ void editorSave()
 	editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }
 
+// Joins all the rows as a single string
 char *editorRowsToString(int *buflen)
 {
 	int totlen = 0;
@@ -604,6 +621,7 @@ char *editorRowsToString(int *buflen)
 	return buf;
 }
 
+// Adds a character
 void editorInsertChar(int c)
 {
 	if (E.cy == E.numrows)
@@ -612,6 +630,7 @@ void editorInsertChar(int c)
 	E.cx++;
 }
 
+// Inserts a character into a row
 void editorRowInsertChar(erow *row, int at, int c)
 {
 	if (at < 0 || at > row->size)
@@ -624,6 +643,7 @@ void editorRowInsertChar(erow *row, int at, int c)
 	E.dirty++;
 }
 
+// Draws the message bar
 void editorDrawMessageBar(struct abuf *ab)
 {
 	abAppend(ab, "\x1b[K", 3);
@@ -634,6 +654,7 @@ void editorDrawMessageBar(struct abuf *ab)
 		abAppend(ab, E.statusmsg, msglen);
 }
 
+// Sets the status message
 void editorSetStatusMessage(const char *fmt, ...)
 {
 	va_list ap;
@@ -670,6 +691,7 @@ void editorDrawStatusBar(struct abuf *ab)
 	abAppend(ab, "\r\n", 2);
 }
 
+// Finds the row's cx from rx
 int editorRowCxToRx(erow *row, int cx)
 {
 	int rx = 0;
